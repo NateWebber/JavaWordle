@@ -15,6 +15,8 @@ public class Wordle {
 
     static HashSet<Character>[] yellowSets;
 
+    static HashMap<Character, Integer> letterScores;
+
     static char[] solution;
 
     public static void main(String[] args) throws FileNotFoundException {
@@ -48,8 +50,8 @@ public class Wordle {
 
     static void initialize() throws FileNotFoundException {
         dictionary = new ArrayList<>();
-        File inFile = new File("/home/nate/personal/wordle/words.txt");
-        Scanner fileReader = new Scanner(inFile);
+        File wordFile = new File("/home/nate/personal/wordle/words.txt");
+        Scanner fileReader = new Scanner(wordFile);
         while (fileReader.hasNextLine())
             dictionary.add(fileReader.nextLine());
         fileReader.close();
@@ -67,6 +69,14 @@ public class Wordle {
         for (int i = 0; i < 5; i++)
             responseGenerator();
 
+        letterScores = new HashMap<>();
+        File scoreFile = new File("/home/nate/personal/wordle/letterscores.txt");
+        fileReader = new Scanner(scoreFile);
+        while (fileReader.hasNextLine()) {
+            String line = fileReader.nextLine();
+            letterScores.put(line.charAt(0), Integer.valueOf(line.substring(2)));
+        }
+        fileReader.close();
         // System.out.println("INITIALIZE: possibleResponses size: " +
         // possibleResponses.size());
     }
@@ -190,7 +200,6 @@ public class Wordle {
 
     static int getMinimaxScore(String possibleGuess) {
         int maxHits = 0;
-        // this loop will run 21 times (21 possible responses)
         for (String response : possibleResponses) {
             // System.out.printf("minimaxScore: starting with response: %s\n", response);
             int hits = 0;
@@ -210,13 +219,21 @@ public class Wordle {
         return score;
     }
 
+    /*
+     * The speed at which this minimax function executes is heavily reliant on how
+     * much the initial filtering pass removes
+     * Fortunately with a good starting guess there isn't too much to worry about
+     * Always room for improvement though
+     * After two rounds of filtering I've never seen this function take more than a
+     * millisecond
+     */
     static String minimaxNextGuess() {
         long startTime = System.currentTimeMillis();
         ArrayList<String>[] scoreArr = new ArrayList[6000];
         for (int i = 0; i < 6000; i++)
             scoreArr[i] = new ArrayList<>();
-        System.out.printf("initialized scoreArr[], time elapsed: %d ms\n",
-                (System.currentTimeMillis() - startTime));
+        // System.out.printf("initialized scoreArr[], time elapsed: %d ms\n",
+        // (System.currentTimeMillis() - startTime));
         startTime = System.currentTimeMillis();
         for (String possibleGuess : dictionary) {
             int score = getMinimaxScore(possibleGuess);
@@ -229,37 +246,29 @@ public class Wordle {
         startTime = System.currentTimeMillis();
         for (int i = 5999; i >= 0; i--) {
             if (scoreArr[i].size() > 0) {
-                return scoreArr[i].get(0);
+                // return scoreArr[i].get(0);
+                return getMostLikelyWord(scoreArr[i]);
             }
         }
         System.out.println("CRITICAL ERROR IN MINIMAX: CRASH IMMINENT");
         return null;
     }
-    // static int countGreens(String word) {
-    // int retInt = 0;
-    // for (int i = 0; i < 5; i++) {
-    // if (solution[i] != '\u0000')
-    // if (word.charAt(i) == solution[i])
-    // retInt += 1;
-    // }
-    // return retInt;
-    // }
 
-    // static String findMostGreens() {
-    // int max = 0;
-    // String word = "";
-    // for (String s : dictionary) {
-    // int greens = countGreens(s);
-    // if (greens > max) {
-    // max = greens;
-    // word = s;
-    // }
-    // }
-    // if (word.equals("")) {
-    // System.out.println("No words in the dictionary had any greens!");
-    // return dictionary.get(0);
-    // }
-    // System.out.printf("%s had the most greens (%d)\n", word, max);
-    // return word;
-    // }
+    static String getMostLikelyWord(ArrayList<String> list) {
+        String retString = "";
+        int minScore = 9999;
+        for (String s : list) {
+            int currScore = 0;
+            for (int i = 0; i < 5; i++) {
+                char currChar = s.charAt(i);
+                currScore += letterScores.get(currChar);
+            }
+            if (currScore < minScore) {
+                minScore = currScore;
+                retString = s;
+            }
+        }
+        return retString;
+    }
+    
 }
