@@ -1,12 +1,15 @@
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Scanner;
 
 public class Wordle {
 
     static ArrayList<String> dictionary;
+
+    static ArrayList<String> possibleResponses;
 
     static HashSet<Character>[] graySets;
 
@@ -33,12 +36,14 @@ public class Wordle {
             // printYellowSets();
             filterYellows();
             // currentGuess = findMostGreens();
-            currentGuess = dictionary.get(0);
+            // currentGuess = dictionary.get(0);
+            currentGuess = minimaxNextGuess();
         }
         System.out.println(
                 "I won! The solution was: \"" + currentGuess + "\". It took me " + guessCount
                         + " guess(es). Good game!");
         reader.close();
+
     }
 
     static void initialize() throws FileNotFoundException {
@@ -55,6 +60,33 @@ public class Wordle {
         for (int i = 0; i < 5; i++)
             yellowSets[i] = new HashSet<Character>();
         solution = new char[5];
+
+        possibleResponses = new ArrayList<String>();
+        possibleResponses.add("");
+
+        for (int i = 0; i < 5; i++)
+            responseGenerator();
+
+        // System.out.println("INITIALIZE: possibleResponses size: " +
+        // possibleResponses.size());
+    }
+
+    static void responseGenerator() {
+        ArrayList<String> removeList = new ArrayList<>();
+        ArrayList<String> addList = new ArrayList<>();
+        for (String s : possibleResponses) {
+            removeList.add(s);
+            String new1 = s + "g";
+            String new2 = s + "y";
+            String new3 = s + "x";
+            addList.add(new1);
+            addList.add(new2);
+            addList.add(new3);
+        }
+        for (String s : removeList)
+            possibleResponses.remove(s);
+        for (String s : addList)
+            possibleResponses.add(s);
     }
 
     static void processResponse(String response, String guess) {
@@ -118,6 +150,91 @@ public class Wordle {
         }
     }
 
+    static String generateResponse(String guess, String code) {
+        HashMap<Character, Integer> letterMap = new HashMap<>();
+        ArrayList<Integer> correctIndices = new ArrayList<>();
+        char[] retArr = new char[5];
+        for (int i = 0; i < 5; i++) {
+            char guessChar = guess.charAt(i);
+            char codeChar = code.charAt(i);
+            // System.out.printf("guessChar: %c codeChar: %c\n", guessChar, codeChar);
+            if (guessChar == codeChar) {
+                retArr[i] = 'g';
+                correctIndices.add(i);
+                continue;
+            } else {
+                if (letterMap.containsKey(codeChar)) {
+                    letterMap.put(codeChar, letterMap.get(codeChar) + 1);
+                } else {
+                    letterMap.put(codeChar, 1);
+                }
+            }
+        }
+        for (int i = 0; i < 5; i++) {
+            if (correctIndices.contains(i))
+                continue;
+            char guessChar = guess.charAt(i);
+            if (!(letterMap.containsKey(guessChar))) {
+                retArr[i] = 'x';
+            } else {
+                if (letterMap.get(guessChar) == 0)
+                    retArr[i] = 'x';
+                else {
+                    retArr[i] = 'y';
+                    letterMap.put(guessChar, letterMap.get(guessChar) - 1);
+                }
+            }
+        }
+        return String.valueOf(retArr);
+    }
+
+    static int getMinimaxScore(String possibleGuess) {
+        int maxHits = 0;
+        // this loop will run 21 times (21 possible responses)
+        for (String response : possibleResponses) {
+            // System.out.printf("minimaxScore: starting with response: %s\n", response);
+            int hits = 0;
+            for (String s : dictionary) {
+                String thisResponse = generateResponse(s, possibleGuess);
+                if (thisResponse.equals(response)) {
+                    // System.out.printf("Hit! Response for %s, %s was %s\n", s, possibleGuess,
+                    // thisResponse);
+                    hits += 1;
+                }
+            }
+            if (hits > maxHits)
+                maxHits = hits;
+        }
+        // System.out.printf("maxHits: %d\n", maxHits);
+        int score = dictionary.size() - maxHits;
+        return score;
+    }
+
+    static String minimaxNextGuess() {
+        long startTime = System.currentTimeMillis();
+        ArrayList<String>[] scoreArr = new ArrayList[6000];
+        for (int i = 0; i < 6000; i++)
+            scoreArr[i] = new ArrayList<>();
+        System.out.printf("initialized scoreArr[], time elapsed: %d ms\n",
+                (System.currentTimeMillis() - startTime));
+        startTime = System.currentTimeMillis();
+        for (String possibleGuess : dictionary) {
+            int score = getMinimaxScore(possibleGuess);
+            // System.out.printf("Found score of %d for possibleGuess %s\n", score,
+            // possibleGuess);
+            scoreArr[score].add(possibleGuess);
+        }
+        System.out.printf("generated all scores, time elapsed: %d ms\n",
+                (System.currentTimeMillis() - startTime));
+        startTime = System.currentTimeMillis();
+        for (int i = 5999; i >= 0; i--) {
+            if (scoreArr[i].size() > 0) {
+                return scoreArr[i].get(0);
+            }
+        }
+        System.out.println("CRITICAL ERROR IN MINIMAX: CRASH IMMINENT");
+        return null;
+    }
     // static int countGreens(String word) {
     // int retInt = 0;
     // for (int i = 0; i < 5; i++) {
