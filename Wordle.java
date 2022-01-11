@@ -15,15 +15,22 @@ public class Wordle {
 
     static ArrayList<String> possibleResponses;
 
-    static HashSet<Character>[] graySets;
+    static HashSet<Character>[] wrongSets;
 
-    static HashSet<Character>[] yellowSets;
+    static HashSet<Character>[] maybeSets;
 
     static HashMap<Character, Integer> letterScores;
 
     static char[] solution;
 
     public static void main(String[] args) throws IOException {
+        if (Integer.valueOf(args[0]) == 0)
+            manualGame();
+        else if (Integer.valueOf(args[0]) > 0)
+            executeStats(Integer.valueOf(args[0]));
+    }
+
+    static void manualGame() throws FileNotFoundException {
         initialize();
         Scanner reader = new Scanner(System.in);
         int guessCount = 0;
@@ -39,8 +46,7 @@ public class Wordle {
             if ((currentResponse.equals("ggggg")))
                 break;
             processResponse(currentResponse, currentGuess);
-            filterYellows();
-            filterGrays();
+            doFiltering();
             if (guessCount < 3) {
                 currentGuess = getMostLikelyWord(dictionary);
             } else {
@@ -51,9 +57,6 @@ public class Wordle {
                 "I won! The solution was: \"" + currentGuess + "\". It took me " + guessCount
                         + " guess(es). Good game!");
         reader.close();
-
-        // executeStats(10);
-
     }
 
     static void executeStats(int count) throws IOException {
@@ -65,6 +68,14 @@ public class Wordle {
         BufferedWriter writer = new BufferedWriter(new FileWriter(outFile));
         int totalGuesses = 0;
         long totalTime = 0;
+        long longestTime = 0;
+        String longestTimeWord = "";
+        long shortestTime = Long.MAX_VALUE;
+        String shortestTimeWord = "";
+        int leastGuesses = Integer.MAX_VALUE;
+        String leastGuessesWord = "";
+        int mostGuesses = 0;
+        String mostGuessesWord = "";
         for (int i = 1; i <= count; i++) {
             initialize();
             long startTime = System.currentTimeMillis();
@@ -81,15 +92,36 @@ public class Wordle {
                 if ((currentResponse.equals("ggggg")))
                     break;
                 processResponse(currentResponse, currentGuess);
-                if (dictionary.size() != 1)
-                    filterYellows();
-                currentGuess = minimaxNextGuess();
+                doFiltering();
+                if (guessCount < 3) {
+                    currentGuess = getMostLikelyWord(dictionary);
+                } else {
+                    currentGuess = minimaxNextGuess();
+                }
             }
             long elapsedTime = (System.currentTimeMillis() - startTime);
             System.out.printf("Finished run %d. Secret code: %s Guess count: %d Run time: %d\n", i, secretCode,
                     guessCount, elapsedTime);
             totalGuesses += guessCount;
             totalTime += elapsedTime;
+
+            if (elapsedTime > longestTime) {
+                longestTime = elapsedTime;
+                longestTimeWord = secretCode;
+            }
+            if (elapsedTime < shortestTime) {
+                shortestTime = elapsedTime;
+                shortestTimeWord = secretCode;
+            }
+            if (guessCount > mostGuesses) {
+                mostGuesses = guessCount;
+                mostGuessesWord = secretCode;
+            }
+            if (guessCount < leastGuesses) {
+                leastGuesses = guessCount;
+                leastGuessesWord = secretCode;
+            }
+
             writer.write(i + " " + secretCode + " " + guessCount + " " + elapsedTime);
             writer.newLine();
         }
@@ -99,11 +131,19 @@ public class Wordle {
         writer.newLine();
         writer.write("Total guesses: " + totalGuesses);
         writer.newLine();
-        writer.write("Total time elapsed: " + totalTime);
+        writer.write("Total time elapsed: " + totalTime + "ms");
         writer.newLine();
         writer.write("Average guesses per game: " + (totalGuesses / count));
         writer.newLine();
-        writer.write("Average time per game: " + (totalTime / count));
+        writer.write("Average time per game: " + (totalTime / count) + "ms");
+        writer.newLine();
+        writer.write("Fastest Game: " + shortestTimeWord + " - " + shortestTime + "ms");
+        writer.newLine();
+        writer.write("Slowest Game: " + longestTimeWord + " - " + longestTime + "ms");
+        writer.newLine();
+        writer.write("Least Guesses: " + leastGuessesWord + " - " + leastGuesses + " guesses");
+        writer.newLine();
+        writer.write("Most Guesses: " + mostGuessesWord + " - " + mostGuesses + " guesses");
         writer.close();
     }
 
@@ -114,12 +154,12 @@ public class Wordle {
         while (fileReader.hasNextLine())
             dictionary.add(fileReader.nextLine());
         fileReader.close();
-        graySets = new HashSet[5];
+        wrongSets = new HashSet[5];
         for (int i = 0; i < 5; i++)
-            graySets[i] = new HashSet<Character>();
-        yellowSets = new HashSet[5];
+            wrongSets[i] = new HashSet<Character>();
+        maybeSets = new HashSet[5];
         for (int i = 0; i < 5; i++)
-            yellowSets[i] = new HashSet<Character>();
+            maybeSets[i] = new HashSet<Character>();
         solution = new char[5];
 
         possibleResponses = new ArrayList<String>();
@@ -157,79 +197,66 @@ public class Wordle {
     }
 
     static void processResponse(String response, String guess) {
+        // first, remove the characters we're going to learn more about
         for (int i = 0; i < 5; i++) {
-            if (solution[i] != '\u0000') // possible funny line
-                continue;
+            HashSet<Character> maybeSet = maybeSets[i];
+            for (int j = 0; j < 5; j++) {
+                if (maybeSet.contains(guess.charAt(j)))
+                    maybeSet.remove(guess.charAt(j));
+            }
+        }
+        // next, add to the maybe/wrong sets as warranted
+        for (int i = 0; i < 5; i++) {
             char responseChar = response.charAt(i);
             char guessChar = guess.charAt(i);
-            ArrayList<String> removeList = new ArrayList<>();
-            switch (responseChar) {
-                case 'g':
-                    for (String s : dictionary)
-                        if (!(s.charAt(i) == guessChar))
-                            removeList.add(s);
-                    solution[i] = guessChar;
-                    break;
-                case 'y':
-                    for (int j = 0; j < 5; j++) {
-                        if (j == i)
-                            continue;
-                        // System.out.printf("Adding %c to yellowSets[%d]\n", guessChar, j);
-                        yellowSets[j].add(guessChar);
-                    }
-                    for (String s : dictionary)
-                        if ((s.charAt(i) == guessChar))
-                            removeList.add(s);
-                    break;
-                case 'x':
-                    graySets[i].add(guessChar);
-                    break;
+            if (solution[i] != '\u0000') // we've already confirmed this character
+                continue;
+            if (responseChar == 'g') { // found a green, write it down
+                solution[i] = guessChar;
+                continue;
             }
-            for (String s : removeList)
-                dictionary.remove(s);
+            HashSet<Character> wrongSet = wrongSets[i];
+
+            if (responseChar == 'y') { // we got a yellow
+                wrongSet.add(guessChar); // it can't be here
+                for (int j = 0; j < 5; j++) { // for every other maybeSet
+                    if (i == j)
+                        continue;
+                    if (!wrongSets[j].contains(guessChar)) // if it's not already in the wrong set
+                        maybeSets[j].add(guessChar); // add it to the maybe set
+                }
+            } else { // we got a gray
+                wrongSet.add(guessChar);
+            }
         }
     }
 
-    static void filterYellows() {
+    static void doFiltering() {
         ArrayList<String> removeList = new ArrayList<>();
-        for (HashSet<Character> set : yellowSets)
+        for (int i = 0; i < 5; i++) {
+            for (String s : dictionary) {
+                if (solution[i] != '\u0000' && s.charAt(i) != solution[i]) { // if we know the letter here and this word
+                                                                             // doesn't have it
+                    removeList.add(s);
+                    // System.out.printf("Removing %s because character %d didn't match known
+                    // character %c\n", s, i + 1,
+                    // solution[i]);
+                } else if (wrongSets[i].contains(s.charAt(i))) { // if this has a known wrong letter
+                    removeList.add(s);
+                    // System.out.printf("Removing %s because character %d was in the wrong set\n",
+                    // s, i + 1);
+                }
+            }
+        }
+        for (HashSet<Character> set : maybeSets)
             for (Character c : set)
                 for (String s : dictionary)
                     if (s.indexOf(c) == -1) {
                         removeList.add(s);
-                        // System.out.printf("Going to remove %s because it didn't have %c\n", s, c);
+                        // System.out.printf("Removing %s because it didn't have %c\n", s, c);
                     }
         for (String s : removeList)
             dictionary.remove(s);
-        // System.out.println("exited filterYellows");
-    }
-
-    static void filterGrays() {
-        ArrayList<String> removeList = new ArrayList<>();
-        for (int i = 0; i < 5; i++) {
-            HashSet<Character> currentSet = graySets[i];
-            for (String s : dictionary) {
-                char dictionaryChar = s.charAt(i);
-                for (Character c : currentSet) {
-                    if (c == dictionaryChar) {
-                        // System.out.printf("removing %s because it had %c at position %d\n", s,
-                        // dictionaryChar, i + 1);
-                        removeList.add(s);
-                    }
-                }
-            }
-        }
-        for (String s : removeList)
-            dictionary.remove(s);
-    }
-
-    static void printYellowSets() {
-        for (int i = 0; i < 5; i++) {
-            HashSet<Character> currSet = yellowSets[i];
-            System.out.printf("YELLOW SET %d :\n", i);
-            for (Character c : currSet)
-                System.out.println(c);
-        }
     }
 
     static String generateResponse(String guess, String code) {
@@ -313,13 +340,13 @@ public class Wordle {
             // possibleGuess);
             scoreArr[score].add(possibleGuess);
         }
-        System.out.printf("generated all scores, time elapsed: %d ms\n",
-                (System.currentTimeMillis() - startTime));
+        // System.out.printf("generated all scores, time elapsed: %d ms\n",
+        // (System.currentTimeMillis() - startTime));
         startTime = System.currentTimeMillis();
         for (int i = 15999; i >= 0; i--) {
             if (scoreArr[i].size() > 0) {
                 // return scoreArr[i].get(0);
-                System.out.printf("Best score was %d\n", i);
+                // System.out.printf("Best score was %d\n", i);
                 return getMostLikelyWord(scoreArr[i]);
             }
         }

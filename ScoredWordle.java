@@ -5,15 +5,15 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Scanner;
 
-public class Wordle {
+public class ScoredWordle {
 
     static ArrayList<String> dictionary;
 
     static ArrayList<String> possibleResponses;
 
-    static HashSet<Character>[] graySets;
-
     static HashSet<Character>[] yellowSets;
+
+    static HashSet<Character>[] graySets;
 
     static HashMap<Character, Integer> letterScores;
 
@@ -151,14 +151,14 @@ public class Wordle {
         // System.out.println("exited filterYellows");
     }
 
-    static void printYellowSets() {
-        for (int i = 0; i < 5; i++) {
-            HashSet<Character> currSet = yellowSets[i];
-            System.out.printf("YELLOW SET %d :\n", i);
-            for (Character c : currSet)
-                System.out.println(c);
-        }
-    }
+    // static void printYellowSets() {
+    // for (int i = 0; i < 5; i++) {
+    // HashSet<Character> currSet = yellowSets[i];
+    // System.out.printf("YELLOW SET %d :\n", i);
+    // for (Character c : currSet)
+    // System.out.println(c);
+    // }
+    // }
 
     static String generateResponse(String guess, String code) {
         HashMap<Character, Integer> letterMap = new HashMap<>();
@@ -270,5 +270,5 @@ public class Wordle {
         }
         return retString;
     }
-    
+
 }
