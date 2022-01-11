@@ -1,1 +1,0 @@
-Wordle Runtime with no hits on first guess : 1579138 ms (~ 26 minutes)
