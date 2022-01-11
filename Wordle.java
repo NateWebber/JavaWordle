@@ -60,7 +60,7 @@ public class Wordle {
     }
 
     static void executeStats(int count) throws IOException {
-        File outFile = new File("/home/nate/personal/wordle/WordleOut.txt");
+        File outFile = new File("/home/nate/personal/wordle/output/WordleOut.txt");
         if (outFile.createNewFile())
             System.out.println("Created output file WordleOut.txt");
         else
