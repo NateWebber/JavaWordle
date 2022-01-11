@@ -1,12 +1,8 @@
-import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.io.FileWriter;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Random;
 import java.util.Scanner;
 
 public class Wordle {
@@ -23,7 +19,7 @@ public class Wordle {
 
     static char[] solution;
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws FileNotFoundException {
         initialize();
         Scanner reader = new Scanner(System.in);
         int guessCount = 0;
@@ -39,72 +35,17 @@ public class Wordle {
             if ((currentResponse.equals("ggggg")))
                 break;
             processResponse(currentResponse, currentGuess);
+            // printYellowSets();
             filterYellows();
-            filterGrays();
-            if (guessCount < 3) {
-                currentGuess = getMostLikelyWord(dictionary);
-            } else {
-                currentGuess = minimaxNextGuess();
-            }
+            // currentGuess = findMostGreens();
+            // currentGuess = dictionary.get(0);
+            currentGuess = minimaxNextGuess();
         }
         System.out.println(
                 "I won! The solution was: \"" + currentGuess + "\". It took me " + guessCount
                         + " guess(es). Good game!");
         reader.close();
 
-        // executeStats(10);
-
-    }
-
-    static void executeStats(int count) throws IOException {
-        File outFile = new File("/home/nate/personal/wordle/WordleOut.txt");
-        if (outFile.createNewFile())
-            System.out.println("Created output file WordleOut.txt");
-        else
-            System.out.println("Output file WordleOut.txt already existed!");
-        BufferedWriter writer = new BufferedWriter(new FileWriter(outFile));
-        int totalGuesses = 0;
-        long totalTime = 0;
-        for (int i = 1; i <= count; i++) {
-            initialize();
-            long startTime = System.currentTimeMillis();
-            int guessCount = 0;
-            String currentResponse = "";
-            String currentGuess = "roate";
-            Random rng = new Random();
-            String secretCode = dictionary.get(rng.nextInt(dictionary.size())); // randomly pick a secret code to try
-                                                                                // and solve for
-            System.out.printf("Starting run %d. Secret code: %s\n", i, secretCode);
-            while (true) {
-                guessCount += 1;
-                currentResponse = generateResponse(currentGuess, secretCode);
-                if ((currentResponse.equals("ggggg")))
-                    break;
-                processResponse(currentResponse, currentGuess);
-                if (dictionary.size() != 1)
-                    filterYellows();
-                currentGuess = minimaxNextGuess();
-            }
-            long elapsedTime = (System.currentTimeMillis() - startTime);
-            System.out.printf("Finished run %d. Secret code: %s Guess count: %d Run time: %d\n", i, secretCode,
-                    guessCount, elapsedTime);
-            totalGuesses += guessCount;
-            totalTime += elapsedTime;
-            writer.write(i + " " + secretCode + " " + guessCount + " " + elapsedTime);
-            writer.newLine();
-        }
-        writer.write("FINAL STATS:");
-        writer.newLine();
-        writer.write("Total games played: " + count);
-        writer.newLine();
-        writer.write("Total guesses: " + totalGuesses);
-        writer.newLine();
-        writer.write("Total time elapsed: " + totalTime);
-        writer.newLine();
-        writer.write("Average guesses per game: " + (totalGuesses / count));
-        writer.newLine();
-        writer.write("Average time per game: " + (totalTime / count));
-        writer.close();
     }
 
     static void initialize() throws FileNotFoundException {
@@ -136,6 +77,8 @@ public class Wordle {
             letterScores.put(line.charAt(0), Integer.valueOf(line.substring(2)));
         }
         fileReader.close();
+        // System.out.println("INITIALIZE: possibleResponses size: " +
+        // possibleResponses.size());
     }
 
     static void responseGenerator() {
@@ -171,22 +114,26 @@ public class Wordle {
                     solution[i] = guessChar;
                     break;
                 case 'y':
+                    for (String s : dictionary)
+                        if ((s.charAt(i) == guessChar))
+                            removeList.add(s);
                     for (int j = 0; j < 5; j++) {
                         if (j == i)
                             continue;
                         // System.out.printf("Adding %c to yellowSets[%d]\n", guessChar, j);
                         yellowSets[j].add(guessChar);
                     }
+                    break;
+                case 'x':
                     for (String s : dictionary)
                         if ((s.charAt(i) == guessChar))
                             removeList.add(s);
-                    break;
-                case 'x':
                     graySets[i].add(guessChar);
                     break;
             }
             for (String s : removeList)
                 dictionary.remove(s);
+
         }
     }
 
@@ -202,25 +149,6 @@ public class Wordle {
         for (String s : removeList)
             dictionary.remove(s);
         // System.out.println("exited filterYellows");
-    }
-
-    static void filterGrays() {
-        ArrayList<String> removeList = new ArrayList<>();
-        for (int i = 0; i < 5; i++) {
-            HashSet<Character> currentSet = graySets[i];
-            for (String s : dictionary) {
-                char dictionaryChar = s.charAt(i);
-                for (Character c : currentSet) {
-                    if (c == dictionaryChar) {
-                        // System.out.printf("removing %s because it had %c at position %d\n", s,
-                        // dictionaryChar, i + 1);
-                        removeList.add(s);
-                    }
-                }
-            }
-        }
-        for (String s : removeList)
-            dictionary.remove(s);
     }
 
     static void printYellowSets() {
@@ -301,8 +229,8 @@ public class Wordle {
      */
     static String minimaxNextGuess() {
         long startTime = System.currentTimeMillis();
-        ArrayList<String>[] scoreArr = new ArrayList[16000];
-        for (int i = 0; i < 16000; i++)
+        ArrayList<String>[] scoreArr = new ArrayList[6000];
+        for (int i = 0; i < 6000; i++)
             scoreArr[i] = new ArrayList<>();
         // System.out.printf("initialized scoreArr[], time elapsed: %d ms\n",
         // (System.currentTimeMillis() - startTime));
@@ -316,10 +244,9 @@ public class Wordle {
         System.out.printf("generated all scores, time elapsed: %d ms\n",
                 (System.currentTimeMillis() - startTime));
         startTime = System.currentTimeMillis();
-        for (int i = 15999; i >= 0; i--) {
+        for (int i = 5999; i >= 0; i--) {
             if (scoreArr[i].size() > 0) {
                 // return scoreArr[i].get(0);
-                System.out.printf("Best score was %d\n", i);
                 return getMostLikelyWord(scoreArr[i]);
             }
         }
@@ -343,5 +270,5 @@ public class Wordle {
         }
         return retString;
     }
-
+    
 }
